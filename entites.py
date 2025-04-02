@@ -31,35 +31,29 @@ class CloudUser:
     
     def request_access(self, owner):
         """Request access to an owner's data from S3"""
-        self.user_key['requested_owner'] = owner
-        
-        # 1. Check if owner exists
-        if owner not in self.cloud.data_store:
-            print("❌ Owner data not found")
+        try:
+            # Retrieve the S3 key for the owner
+            s3_key = self.cloud._get_s3_key(owner)
+            if not s3_key:
+                print("❌ Access denied: No S3 key found.")
+                return None
+
+            # Request the file from the cloud system
+            decrypted_data = self.cloud.access_file(self.name, self.attributes, owner)
+            if not decrypted_data:
+                print("❌ Access denied.")
+                return None
+
+            # Save the file locally
+            file_name = s3_key.split('/')[-1]  # Extract the file name from the S3 key
+            with open(file_name, 'wb') as file:
+                file.write(decrypted_data)
+                print(f"✅ File '{file_name}' downloaded and saved locally.")
+
+            return decrypted_data
+        except Exception as e:
+            print(f"❌ Failed to request access: {e}")
             return None
-            
-        # 2. Check CP-ABE policy
-        policy = self.cloud.keys[owner]['policy']
-        if not self.cloud.check_access_policy(self.user_key, policy):
-            print("❌ Access denied by CP-ABE policy")
-            return None
-            
-        # 3. Check revocation list
-        if self.user_key['user_id'] in self.cloud.keys[owner]['revoked_users']:
-            print("❌ Access denied: User is revoked")
-            return None
-            
-        # 4. Download from S3 if all checks pass
-        s3_key = self.cloud.data_store[owner]
-        encrypted_data = self.cloud.download_from_s3(s3_key)
-        if not encrypted_data:
-            print("❌ Failed to download from S3")
-            return None
-            
-        # 5. Decrypt and return data
-        key = self.cloud.keys[owner]['key']
-        self.cloud.audit_log.append(f"Access granted to {self.user_key['user_id']} for {owner}'s data")
-        return self.cloud.decrypt_data(key, encrypted_data)
     
     def get_credentials(self):
         """Get user credentials (for debugging)"""
@@ -84,4 +78,3 @@ class Authority:
     def revoke_user(self, user_id):
         """Revoke a user's access across the system"""
         self.cloud.revoke_user(user_id)
- 

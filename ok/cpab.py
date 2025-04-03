@@ -76,11 +76,13 @@ class IntegratedCloudSystem:
                 for row in reader:
                     if row['admin'].lower() == owner.lower():
                         required_roles = row['allowed_roles'].split(',')
-                        if user_role in required_roles:
-                            s3_key = row['s3_key']  # Retrieve the correct S3 key
-                            break
+                        if user_role not in required_roles:  # Check if the role is not allowed
+                            print(f"❌ Access denied for {user} with role {user_role}")
+                            return None
+                        s3_key = row['s3_key']  # Retrieve the correct S3 key
+                        break
                 else:
-                    print(f"❌ Access denied for {user} with role {user_role}")
+                    print(f"❌ Access denied: No matching owner found for {owner}")
                     return None
 
             # Attempt to retrieve the file from S3
@@ -91,6 +93,8 @@ class IntegratedCloudSystem:
         except Exception as e:
             print(f"Failed to access file: {e}")
             return None
+
+    
 
     def download_from_s3(self, s3_key):
         """Download a file from S3"""
